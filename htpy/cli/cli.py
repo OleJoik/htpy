@@ -8,6 +8,8 @@ from htpy.utils import html_to_htpy
 class ConvertArgs:
     shorthand: bool
     format: bool
+    files: list[str]
+    output: list[str | None]
 
 
 def main():
@@ -29,9 +31,24 @@ def main():
         help="Format output code (requires black installed)",
         action="store_true",
     )
+    convert_parser.add_argument(
+        "files",
+        nargs="*",
+        help="Optionally supply a files to parse (Requires -o)",
+    )
+
+    convert_parser.add_argument(
+        "-o",
+        "--output",
+        nargs=1,
+        help="Existing output directory to store parsed files",
+    )
 
     def _convert_html(args: ConvertArgs):
-        convert_html_cli(args.shorthand, args.format)
+        if args.files and not len(args.output) == 1:
+            print("\nError: Output is required when files are provided.")
+        else:
+            convert_html_cli(args.shorthand, args.format, args.files, args.output[0])
 
     convert_parser.set_defaults(func=_convert_html)
 
@@ -44,7 +61,9 @@ if __name__ == "__main__":
     main()
 
 
-def convert_html_cli(shorthand_id_class: bool, format: bool):
+def convert_html_cli(
+    shorthand_id_class: bool, format: bool, files: list[str], output: str | None
+):
     import time
 
     print("")
@@ -52,28 +71,54 @@ def convert_html_cli(shorthand_id_class: bool, format: bool):
     print(f"selected options: ")
     print(f"              format: {format}")
     print(f"  shorthand id class: {shorthand_id_class}")
-    print("\n>>>>>>>>>>>>>>>>>>")
-    print(">>> paste html >>>")
-    print(">>>>>>>>>>>>>>>>>>\n")
+    print(f"              output: {output}")
+    print(f"               files: {files}")
 
-    collected_text = ""
-    input_starttime = None
+    if files and output:
 
-    try:
-        while True:
-            user_input = input()
-            if not input_starttime:
-                input_starttime = time.time()
+        failed_files: list[str] = []
+        succeeded_files: list[str] = []
+        for f in files:
+            try:
+                with open(f, "r") as r:
+                    content = r.read()
+                    htpy = html_to_htpy(content, shorthand_id_class, format)
 
-            collected_text += user_input
+                    new_filename = f"{output}/{f.split('.')[0]}.py"
+                    with open(new_filename, "w") as w:
+                        w.write(htpy)
 
-            if input_starttime + 0.1 < time.time():
-                break
+                    succeeded_files.append(new_filename)
+            except:
+                failed_files.append(f)
+                raise
 
-        output = html_to_htpy(collected_text, shorthand_id_class, format)
-        print("\n##############################################")
-        print("### serialized and formatted python (htpy) ###")
-        print("##############################################\n")
-        print(output)
-    except KeyboardInterrupt:
-        print("\nInterrupted")
+        print(f"\nFiles written: {succeeded_files}")
+
+        if failed_files:
+            print(f"Failed files: {failed_files}")
+
+    else:
+        print("\nNo files selected. Paste html?")
+        print(">>>>>>>>>>>>>>>>>>")
+        print(">>> paste html >>>")
+        print(">>>>>>>>>>>>>>>>>>\n")
+        collected_text = ""
+        input_starttime = None
+        try:
+            while True:
+                user_input = input()
+                if not input_starttime:
+                    input_starttime = time.time()
+
+                collected_text += user_input
+
+                if input_starttime + 0.1 < time.time():
+                    break
+
+            print("\n##############################################")
+            print("### serialized and formatted python (htpy) ###")
+            print("##############################################\n")
+            print(html_to_htpy(collected_text, shorthand_id_class, format))
+        except KeyboardInterrupt:
+            print("\nInterrupted")
